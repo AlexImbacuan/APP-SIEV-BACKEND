@@ -11,7 +11,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/empleados")
-@CrossOrigin(origins = "http://localhost:3000") // Cambia según tu frontend
 public class EmpleadoControlador {
 
     private final EmpleadoServicio empleadoServicio;
