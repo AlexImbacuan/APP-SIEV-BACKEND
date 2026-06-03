@@ -11,6 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/empleados")
+@CrossOrigin(origins = "http://localhost:3000") // Cambia según tu frontend
 public class EmpleadoControlador {
 
     private final EmpleadoServicio empleadoServicio;
@@ -60,5 +61,10 @@ public class EmpleadoControlador {
     public ResponseEntity<List<Empleado>> obtenerEmpleadosConSueldoMayorA(@PathVariable Double sueldo) {
         List<Empleado> empleados = empleadoServicio.obtenerEmpleadosConSueldoMayorA(sueldo);
         return ResponseEntity.ok(empleados);
+    }
+
+    @GetMapping("/test")
+    public String test() {
+        return "ok";
     }
 }
