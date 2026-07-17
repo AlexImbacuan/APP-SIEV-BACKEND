@@ -43,17 +43,21 @@ public class AuthService {
         }
 
         String accessToken = jwtService.generarToken(usuario);
+        String nuevoRefreshToken = jwtService.generarRefreshToken();
 
-        String refreshToken = jwtService.generarRefreshToken();
+        // Buscar si el usuario ya tiene un refresh token
+        RefreshToken refresh = refreshTokenRepository
+                .findByUsuario(usuario)
+                .orElse(new RefreshToken());
 
-        RefreshToken refresh = new RefreshToken();
-        refresh.setToken(refreshToken);
+        // Actualizar o crear
         refresh.setUsuario(usuario);
+        refresh.setToken(nuevoRefreshToken);
         refresh.setExpiracion(LocalDateTime.now().plusDays(7));
 
         refreshTokenRepository.save(refresh);
 
-        return new LoginResponse(accessToken, refreshToken);
+        return new LoginResponse(accessToken, nuevoRefreshToken);
     }
 
     public void registrar(RegisterRequest request) {
