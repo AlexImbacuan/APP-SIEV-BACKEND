@@ -2,6 +2,7 @@ package com.ejemplo.demo.servicio;
 
 import com.ejemplo.demo.dto.LoginRequest;
 import com.ejemplo.demo.dto.LoginResponse;
+import com.ejemplo.demo.dto.RegisterRequest;
 import com.ejemplo.demo.modelo.RefreshToken;
 import com.ejemplo.demo.modelo.Usuario;
 import com.ejemplo.demo.repositorio.RefreshTokenRepository;
@@ -53,6 +54,23 @@ public class AuthService {
         refreshTokenRepository.save(refresh);
 
         return new LoginResponse(accessToken, refreshToken);
+    }
+
+    public void registrar(RegisterRequest request) {
+
+        if (usuarioRepositorio.findByEmail(request.getEmail()).isPresent()) {
+            throw new RuntimeException("El usuario ya existe");
+        }
+
+        Usuario usuario = new Usuario();
+
+        usuario.setNombre(request.getNombre());
+        usuario.setEmail(request.getEmail());
+
+        // Aquí se cifra la contraseña
+        usuario.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        usuarioRepositorio.save(usuario);
     }
 
 }

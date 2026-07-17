@@ -3,6 +3,7 @@ com\ejemplo\demo\repositorio\ProyectoRepositorio.class
 com\ejemplo\demo\modelo\Empleado.class
 com\ejemplo\demo\modelo\Usuario.class
 com\ejemplo\demo\DemoApplication.class
+com\ejemplo\demo\dto\RegisterRequest.class
 com\ejemplo\demo\configuracion\SeguridadConfiguracion.class
 com\ejemplo\demo\servicio\UsuarioServicio.class
 com\ejemplo\demo\servicio\EmpleadoServicioImpl.class
