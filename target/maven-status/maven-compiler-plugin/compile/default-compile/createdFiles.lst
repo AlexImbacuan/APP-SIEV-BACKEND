@@ -24,4 +24,5 @@ com\ejemplo\demo\configuracion\CorsConfiguracion$1.class
 com\ejemplo\demo\servicio\EmpleadoServicio.class
 com\ejemplo\demo\controlador\AuthControlador.class
 com\ejemplo\demo\seguridad\JwtFiltro.class
+com\ejemplo\demo\servicio\ProyectoServicioImpl.class
 com\ejemplo\demo\controlador\EmpleadoControlador.class

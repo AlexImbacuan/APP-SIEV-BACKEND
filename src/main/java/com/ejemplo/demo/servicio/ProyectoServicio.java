@@ -1,43 +1,20 @@
 package com.ejemplo.demo.servicio;
 
 import com.ejemplo.demo.modelo.Proyecto;
-import com.ejemplo.demo.repositorio.ProyectoRepositorio;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
-@Service
-public class ProyectoServicio {
+public interface ProyectoServicio {
 
-    private final ProyectoRepositorio proyectoRepositorio;
+    List<Proyecto> listarTodos();
 
-    @Autowired
-    public ProyectoServicio(ProyectoRepositorio proyectoRepositorio) {
-        this.proyectoRepositorio = proyectoRepositorio;
-    }
+    Optional<Proyecto> buscarPorSerial(String serial);
 
-    public Proyecto guardarProyecto(Proyecto proyecto) {
-        return proyectoRepositorio.save(proyecto);
-    }
+    Proyecto guardar(Proyecto proyecto);
 
-    public Proyecto obtenerProyectoPorSerial(String serial) {
-        return proyectoRepositorio.findById(serial).orElse(null);
-    }
+    Proyecto actualizar(String serial, Proyecto proyecto);
 
-    public List<Proyecto> obtenerTodosLosProyectos() {
-        return proyectoRepositorio.findAll();
-    }
+    void eliminar(String serial);
 
-    public Proyecto actualizarProyecto(String serial, Proyecto proyecto) {
-        if (proyectoRepositorio.existsById(serial)) {
-            proyecto.setSerial(serial);
-            return proyectoRepositorio.save(proyecto);
-        }
-        return null;
-    }
-
-    public void eliminarProyecto(String serial) {
-        proyectoRepositorio.deleteById(serial);
-    }
 }

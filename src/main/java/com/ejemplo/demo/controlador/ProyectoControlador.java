@@ -2,8 +2,6 @@ package com.ejemplo.demo.controlador;
 
 import com.ejemplo.demo.modelo.Proyecto;
 import com.ejemplo.demo.servicio.ProyectoServicio;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,38 +13,41 @@ public class ProyectoControlador {
 
     private final ProyectoServicio proyectoServicio;
 
-    @Autowired
     public ProyectoControlador(ProyectoServicio proyectoServicio) {
         this.proyectoServicio = proyectoServicio;
     }
 
-    @PostMapping
-    public ResponseEntity<Proyecto> guardarProyecto(@RequestBody Proyecto proyecto) {
-        Proyecto nuevoProyecto = proyectoServicio.guardarProyecto(proyecto);
-        return new ResponseEntity<>(nuevoProyecto, HttpStatus.CREATED);
+    @GetMapping
+    public List<Proyecto> listar() {
+        return proyectoServicio.listarTodos();
     }
 
     @GetMapping("/{serial}")
-    public ResponseEntity<Proyecto> obtenerProyectoPorSerial(@PathVariable String serial) {
-        Proyecto proyecto = proyectoServicio.obtenerProyectoPorSerial(serial);
-        return proyecto != null ? ResponseEntity.ok(proyecto) : ResponseEntity.notFound().build();
+    public ResponseEntity<Proyecto> buscar(@PathVariable String serial) {
+
+        return proyectoServicio.buscarPorSerial(serial)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping
-    public ResponseEntity<List<Proyecto>> obtenerTodosLosProyectos() {
-        List<Proyecto> proyectos = proyectoServicio.obtenerTodosLosProyectos();
-        return ResponseEntity.ok(proyectos);
+    @PostMapping
+    public Proyecto guardar(@RequestBody Proyecto proyecto) {
+        return proyectoServicio.guardar(proyecto);
     }
 
     @PutMapping("/{serial}")
-    public ResponseEntity<Proyecto> actualizarProyecto(@PathVariable String serial, @RequestBody Proyecto proyecto) {
-        Proyecto proyectoActualizado = proyectoServicio.actualizarProyecto(serial, proyecto);
-        return proyectoActualizado != null ? ResponseEntity.ok(proyectoActualizado) : ResponseEntity.notFound().build();
+    public Proyecto actualizar(@PathVariable String serial,
+                               @RequestBody Proyecto proyecto) {
+
+        return proyectoServicio.actualizar(serial, proyecto);
     }
 
     @DeleteMapping("/{serial}")
-    public ResponseEntity<Void> eliminarProyecto(@PathVariable String serial) {
-        proyectoServicio.eliminarProyecto(serial);
+    public ResponseEntity<Void> eliminar(@PathVariable String serial) {
+
+        proyectoServicio.eliminar(serial);
+
         return ResponseEntity.noContent().build();
     }
+
 }
