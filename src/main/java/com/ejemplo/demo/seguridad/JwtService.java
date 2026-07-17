@@ -4,6 +4,8 @@ import com.ejemplo.demo.modelo.Usuario;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -14,12 +16,17 @@ import java.util.UUID;
 @Service
 public class JwtService {
 
-    // 64 caracteres (512 bits)
-    private static final String SECRET =
-            "1234567890123456789012345678901234567890123456789012345678901234";
+    @Value("${jwt.secret}")
+    private String secret;
 
-    private final SecretKey key =
-            Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+    private SecretKey key;
+
+    @PostConstruct
+    public void init() {
+        key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
+
+
 
     public String generarToken(Usuario usuario) {
 
