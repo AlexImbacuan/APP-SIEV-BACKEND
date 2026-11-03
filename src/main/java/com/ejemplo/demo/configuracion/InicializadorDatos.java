@@ -17,18 +17,23 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Datos iniciales de RBAC. Se ejecuta en cada arranque y es idempotente:
  * solo crea lo que falta, nunca duplica.
  *
  * - Permisos: crea los del catálogo que no existan.
- * - Roles: crea SUPERADMIN, SUPERVISOR y TECNICO si no existen. Los permisos por
- *   defecto solo se aplican al CREAR el rol, para no pisar los cambios que haga
- *   el SUPERADMIN. El rol SUPERADMIN siempre se sincroniza con todos los permisos.
+ * - Roles: crea SUPERADMIN, SUPERVISOR y TECNICO si no existen, con sus permisos
+ *   por defecto. El rol SUPERADMIN siempre se sincroniza con todos los permisos.
+ * - Permisos nuevos: cuando un permiso del catálogo se crea por PRIMERA vez, se
+ *   agrega también a los roles existentes que lo tengan en su lista por defecto.
+ *   Un permiso que ya existía nunca se vuelve a agregar, para no pisar los cambios
+ *   que haga el SUPERADMIN.
  * - Superadmin: si ADMIN_EMAIL y ADMIN_PASSWORD están definidas, crea ese usuario
  *   (o le asigna SUPERADMIN si ya existía; su contraseña no se cambia).
  */
@@ -65,22 +70,26 @@ public class InicializadorDatos implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
 
-        Map<String, Permiso> permisos = crearPermisos();
+        Set<String> creadosAhora = new HashSet<>();
+        Map<String, Permiso> permisos = crearPermisos(creadosAhora);
 
         Rol superadmin = crearRolSiNoExiste(Permisos.ROL_SUPERADMIN,
                 "Acceso total; asigna roles y permisos", permisos.values());
         superadmin.getPermisos().addAll(permisos.values()); // siempre todos
 
-        crearRolSiNoExiste(Permisos.ROL_SUPERVISOR, "Gestiona proyectos y empleados",
+        Rol supervisor = crearRolSiNoExiste(Permisos.ROL_SUPERVISOR, "Gestiona proyectos y empleados",
                 seleccionar(permisos, Permisos.POR_DEFECTO_SUPERVISOR));
+        agregarPermisosNuevos(supervisor, Permisos.POR_DEFECTO_SUPERVISOR, creadosAhora, permisos);
 
-        crearRolSiNoExiste(Permisos.ROL_TECNICO, "Consulta proyectos y empleados",
+        Rol tecnico = crearRolSiNoExiste(Permisos.ROL_TECNICO, "Consulta proyectos y empleados",
                 seleccionar(permisos, Permisos.POR_DEFECTO_TECNICO));
+        agregarPermisosNuevos(tecnico, Permisos.POR_DEFECTO_TECNICO, creadosAhora, permisos);
 
         crearSuperadmin(superadmin);
     }
 
-    private Map<String, Permiso> crearPermisos() {
+    /** Crea los permisos que falten y anota en creadosAhora los códigos recién creados. */
+    private Map<String, Permiso> crearPermisos(Set<String> creadosAhora) {
 
         Map<String, Permiso> resultado = new LinkedHashMap<>();
 
@@ -88,6 +97,7 @@ public class InicializadorDatos implements CommandLineRunner {
             Permiso permiso = permisoRepositorio.findByCodigo(def.codigo())
                     .orElseGet(() -> {
                         log.info("Creando permiso {}", def.codigo());
+                        creadosAhora.add(def.codigo());
                         return permisoRepositorio.save(new Permiso(def.codigo(), def.descripcion(), def.modulo()));
                     });
             resultado.put(def.codigo(), permiso);
@@ -107,6 +117,22 @@ public class InicializadorDatos implements CommandLineRunner {
                     "Seed inicial: " + nombre);
             return rol;
         });
+    }
+
+    /** Agrega al rol los permisos recién creados que estén en su lista por defecto. */
+    private void agregarPermisosNuevos(Rol rol, List<String> porDefecto,
+                                       Set<String> creadosAhora, Map<String, Permiso> permisos) {
+
+        List<String> agregados = porDefecto.stream()
+                .filter(creadosAhora::contains)
+                .filter(codigo -> rol.getPermisos().add(permisos.get(codigo))) // false si ya lo tenía
+                .toList();
+
+        if (!agregados.isEmpty()) {
+            log.info("Permisos nuevos agregados al rol {}: {}", rol.getNombre(), agregados);
+            auditoria.registrarComo("sistema", "ACTUALIZAR_PERMISOS_ROL", AuditoriaServicio.ENTIDAD_ROL,
+                    rol.getId(), "Seed: permisos nuevos por defecto " + agregados);
+        }
     }
 
     private void crearSuperadmin(Rol rolSuperadmin) {

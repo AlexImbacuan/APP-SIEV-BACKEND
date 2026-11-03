@@ -34,6 +34,11 @@ public final class Permisos {
 
     public static final String AUDITORIA_VER = "auditoria:ver";
 
+    // ---- Módulos del frontend ----
+    public static final String ADMINISTRACION_VER = "administracion:ver";
+    public static final String VENTAS_VER = "ventas:ver";
+    public static final String TRABAJADOR_VER = "trabajador:ver";
+
     public record Definicion(String codigo, String descripcion, String modulo) {
     }
 
@@ -51,17 +56,30 @@ public final class Permisos {
             new Definicion(USUARIOS_GESTIONAR, "Crear, editar, activar/desactivar usuarios y asignarles rol", "usuarios"),
             new Definicion(ROLES_GESTIONAR, "Crear roles y asignarles permisos", "roles"),
 
-            new Definicion(AUDITORIA_VER, "Consultar el registro de auditoría", "auditoria")
+            new Definicion(AUDITORIA_VER, "Consultar el registro de auditoría", "auditoria"),
+
+            new Definicion(ADMINISTRACION_VER, "Ver el módulo de administración", "administracion"),
+            new Definicion(VENTAS_VER, "Ver el módulo de ventas", "ventas"),
+            new Definicion(TRABAJADOR_VER, "Ver el módulo de trabajador", "trabajador")
     );
 
-    /** Permisos por defecto de SUPERVISOR (solo se aplican al crear el rol). */
+    /*
+     * Permisos por defecto de cada rol. Se aplican:
+     *  - al CREAR el rol (todos los de la lista), y
+     *  - al CREAR un permiso nuevo del catálogo (solo ese permiso, a los roles que lo
+     *    tengan en su lista). Así un permiso agregado después llega a los roles que ya
+     *    existen en la BD, pero si el SUPERADMIN se lo quita luego, no vuelve a aparecer.
+     * El SUPERADMIN no necesita lista: siempre tiene todos.
+     */
+
     public static final List<String> POR_DEFECTO_SUPERVISOR = List.of(
             PROYECTOS_VER, PROYECTOS_CREAR, PROYECTOS_EDITAR, PROYECTOS_ELIMINAR,
-            EMPLEADOS_VER, EMPLEADOS_CREAR, EMPLEADOS_EDITAR, EMPLEADOS_ELIMINAR
+            EMPLEADOS_VER, EMPLEADOS_CREAR, EMPLEADOS_EDITAR, EMPLEADOS_ELIMINAR,
+            VENTAS_VER
     );
 
-    /** Permisos por defecto de TECNICO (solo se aplican al crear el rol). */
     public static final List<String> POR_DEFECTO_TECNICO = List.of(
-            PROYECTOS_VER, EMPLEADOS_VER
+            PROYECTOS_VER, EMPLEADOS_VER,
+            TRABAJADOR_VER
     );
 }
