@@ -1,0 +1,4 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.ejemplo.demo.configuracion.VerificadorVariablesEntorno
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.ejemplo.demo.configuracion.VariablesEntornoFailureAnalyzer

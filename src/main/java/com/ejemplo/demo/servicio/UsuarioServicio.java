@@ -1,12 +1,23 @@
 package com.ejemplo.demo.servicio;
 
+import com.ejemplo.demo.dto.ActualizarUsuarioRequest;
+import com.ejemplo.demo.dto.CrearUsuarioRequest;
+import com.ejemplo.demo.dto.UsuarioDTO;
+
 import java.util.List;
-import com.ejemplo.demo.modelo.Usuario;
 
 public interface UsuarioServicio {
 
-    List<Usuario> listar();
+    List<UsuarioDTO> listar();
 
-    Usuario guardar(Usuario usuario);
+    UsuarioDTO obtener(Long id);
+
+    UsuarioDTO crear(CrearUsuarioRequest request);
+
+    UsuarioDTO actualizar(Long id, ActualizarUsuarioRequest request);
+
+    UsuarioDTO cambiarEstado(Long id, boolean activo);
+
+    UsuarioDTO asignarRol(Long id, Long rolId);
 
 }

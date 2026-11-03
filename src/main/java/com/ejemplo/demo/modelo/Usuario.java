@@ -14,7 +14,18 @@ public class Usuario {
     @Column(unique = true)
     private String email;
 
+    // Siempre guardado con BCrypt (ver PasswordEncoder en SeguridadConfiguracion)
     private String password;
+
+    // Nullable: los usuarios existentes y los registrados quedan sin rol
+    // hasta que un SUPERADMIN les asigne uno.
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "rol_id")
+    private Rol rol;
+
+    // Nullable para que ddl-auto=update pueda agregar la columna a una tabla
+    // con datos. null se trata como activo (ver estaActivo()).
+    private Boolean activo;
 
     public Usuario() {
     }
@@ -45,5 +56,29 @@ public class Usuario {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public Rol getRol() {
+        return rol;
+    }
+
+    public void setRol(Rol rol) {
+        this.rol = rol;
+    }
+
+    public Boolean getActivo() {
+        return activo;
+    }
+
+    public void setActivo(Boolean activo) {
+        this.activo = activo;
+    }
+
+    public boolean estaActivo() {
+        return activo == null || activo;
+    }
+
+    public boolean tieneRol(String nombreRol) {
+        return rol != null && rol.getNombre().equals(nombreRol);
     }
 }
