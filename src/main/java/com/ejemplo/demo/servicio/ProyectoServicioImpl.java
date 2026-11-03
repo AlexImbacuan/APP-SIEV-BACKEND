@@ -2,7 +2,9 @@ package com.ejemplo.demo.servicio;
 
 import com.ejemplo.demo.modelo.Proyecto;
 import com.ejemplo.demo.repositorio.ProyectoRepositorio;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,7 +37,7 @@ public class ProyectoServicioImpl implements ProyectoServicio {
     public Proyecto actualizar(String serial, Proyecto proyecto) {
 
         Proyecto proyectoActual = proyectoRepositorio.findById(serial)
-                .orElseThrow(() -> new RuntimeException("Proyecto no encontrado"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Proyecto no encontrado"));
 
         proyectoActual.setDescripcionGlobal(proyecto.getDescripcionGlobal());
         proyectoActual.setValorTotal(proyecto.getValorTotal());
@@ -50,7 +52,7 @@ public class ProyectoServicioImpl implements ProyectoServicio {
     public void eliminar(String serial) {
 
         if (!proyectoRepositorio.existsById(serial)) {
-            throw new RuntimeException("Proyecto no encontrado");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Proyecto no encontrado");
         }
 
         proyectoRepositorio.deleteById(serial);
