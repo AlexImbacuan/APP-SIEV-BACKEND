@@ -34,6 +34,7 @@ src/main/java/com/ejemplo/demo/
 | `JWT_SECRET` | Sí | Clave para firmar los tokens. Mínimo 32 caracteres |
 | `ADMIN_EMAIL` | No | Email del usuario SUPERADMIN que se crea al arrancar |
 | `ADMIN_PASSWORD` | No | Contraseña de ese SUPERADMIN |
+| `SWAGGER_HABILITADO` | No | `true` para encender Swagger. Por defecto está apagado (ver sección Swagger) |
 | `CORS_ORIGENES` | No | Orígenes permitidos, separados por comas. Por defecto: `http://localhost:3000,https://sievsas.com,https://www.sievsas.com` |
 
 Si falta una variable obligatoria, o `JWT_SECRET` es demasiado corta, la aplicación no
@@ -88,7 +89,14 @@ tocan la base de datos real ni necesitan variables de entorno.
 
 ## Documentación interactiva (Swagger)
 
-Con la aplicación en marcha:
+Swagger está **apagado por defecto** para que nunca quede expuesto en producción.
+Para usarlo en local, define la variable de entorno `SWAGGER_HABILITADO=true`
+(en IntelliJ: *Run → Edit Configurations → Environment variables*).
+
+En producción (Render) además están definidas `SPRINGDOC_API_DOCS_ENABLED=false` y
+`SPRINGDOC_SWAGGER_UI_ENABLED=false` como protección extra. No definir `SWAGGER_HABILITADO` allí.
+
+Con la aplicación en marcha y Swagger encendido:
 
 - **Swagger UI**: `http://localhost:8080/swagger-ui.html`
 - **Especificación OpenAPI (JSON)**: `http://localhost:8080/v3/api-docs`
