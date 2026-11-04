@@ -34,6 +34,12 @@ public final class Permisos {
 
     public static final String AUDITORIA_VER = "auditoria:ver";
 
+    public static final String COTIZACIONES_VER = "cotizaciones:ver";
+    public static final String COTIZACIONES_CREAR = "cotizaciones:crear";
+    public static final String COTIZACIONES_EDITAR = "cotizaciones:editar";
+    public static final String COTIZACIONES_APROBAR = "cotizaciones:aprobar";
+    public static final String COTIZACIONES_ELIMINAR = "cotizaciones:eliminar";
+
     // ---- Módulos del frontend ----
     public static final String ADMINISTRACION_VER = "administracion:ver";
     public static final String VENTAS_VER = "ventas:ver";
@@ -58,6 +64,12 @@ public final class Permisos {
 
             new Definicion(AUDITORIA_VER, "Consultar el registro de auditoría", "auditoria"),
 
+            new Definicion(COTIZACIONES_VER, "Ver cotizaciones", "cotizaciones"),
+            new Definicion(COTIZACIONES_CREAR, "Crear cotizaciones (a mano o desde el PDF de Siigo)", "cotizaciones"),
+            new Definicion(COTIZACIONES_EDITAR, "Editar cotizaciones, materiales, notas y número de factura", "cotizaciones"),
+            new Definicion(COTIZACIONES_APROBAR, "Cambiar el estado de las cotizaciones", "cotizaciones"),
+            new Definicion(COTIZACIONES_ELIMINAR, "Eliminar cotizaciones", "cotizaciones"),
+
             new Definicion(ADMINISTRACION_VER, "Ver el módulo de administración", "administracion"),
             new Definicion(VENTAS_VER, "Ver el módulo de ventas", "ventas"),
             new Definicion(TRABAJADOR_VER, "Ver el módulo de trabajador", "trabajador")
@@ -75,11 +87,14 @@ public final class Permisos {
     public static final List<String> POR_DEFECTO_SUPERVISOR = List.of(
             PROYECTOS_VER, PROYECTOS_CREAR, PROYECTOS_EDITAR, PROYECTOS_ELIMINAR,
             EMPLEADOS_VER, EMPLEADOS_CREAR, EMPLEADOS_EDITAR, EMPLEADOS_ELIMINAR,
-            VENTAS_VER
+            VENTAS_VER,
+            COTIZACIONES_VER, COTIZACIONES_CREAR, COTIZACIONES_EDITAR, COTIZACIONES_APROBAR,
+            COTIZACIONES_ELIMINAR
     );
 
     public static final List<String> POR_DEFECTO_TECNICO = List.of(
             PROYECTOS_VER, EMPLEADOS_VER,
-            TRABAJADOR_VER
+            TRABAJADOR_VER,
+            COTIZACIONES_VER
     );
 }

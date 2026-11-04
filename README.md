@@ -10,6 +10,7 @@ queda registrada en una tabla de auditoría.
 - Spring Boot 3.5 (Web, Data JPA, Security)
 - PostgreSQL (Supabase) en producción y H2 en memoria para los tests
 - JWT con la librería `jjwt` 0.12
+- Apache PDFBox 3 para leer las cotizaciones en PDF de Siigo
 - Maven (incluye el wrapper `mvnw`)
 - Docker (build multi-etapa)
 
@@ -20,7 +21,7 @@ src/main/java/com/ejemplo/demo/
 ├── configuracion/   Seguridad, CORS, datos iniciales y verificación de variables de entorno
 ├── controlador/     Endpoints REST y manejo global de errores
 ├── dto/             Objetos de entrada y salida de la API
-├── modelo/          Entidades JPA (Usuario, Rol, Permiso, Proyecto, Empleado, Auditoria, RefreshToken)
+├── modelo/          Entidades JPA (Usuario, Rol, Permiso, Proyecto, Empleado, Cotizacion, Auditoria, RefreshToken)
 ├── repositorio/     Repositorios Spring Data JPA
 ├── seguridad/       JWT, filtro de autenticación y catálogo de permisos (Permisos.java)
 └── servicio/        Lógica de negocio
@@ -168,8 +169,8 @@ Al arrancar, `InicializadorDatos` crea los permisos y roles que falten (nunca du
 | Rol | Permisos por defecto |
 |---|---|
 | `SUPERADMIN` | Todos (se sincroniza en cada arranque) |
-| `SUPERVISOR` | `proyectos:*`, `empleados:*`, `ventas:ver` |
-| `TECNICO` | `proyectos:ver`, `empleados:ver`, `trabajador:ver` |
+| `SUPERVISOR` | `proyectos:*`, `empleados:*`, `cotizaciones:*`, `ventas:ver` |
+| `TECNICO` | `proyectos:ver`, `empleados:ver`, `cotizaciones:ver`, `trabajador:ver` |
 
 Catálogo de permisos (definido en `seguridad/Permisos.java`):
 
@@ -180,6 +181,11 @@ Catálogo de permisos (definido en `seguridad/Permisos.java`):
 | `usuarios:gestionar` | Crear, editar, activar/desactivar usuarios y asignarles rol |
 | `roles:gestionar` | Crear roles y asignarles permisos |
 | `auditoria:ver` | Consultar el registro de auditoría |
+| `cotizaciones:ver` | Ver cotizaciones y la lista de responsables |
+| `cotizaciones:crear` | Crear cotizaciones (a mano o leyendo el PDF de Siigo) |
+| `cotizaciones:editar` | Editar datos, materiales, notas y número de factura |
+| `cotizaciones:aprobar` | Cambiar el estado (pendiente / aprobada / no aprobada) |
+| `cotizaciones:eliminar` | Eliminar cotizaciones |
 | `administracion:ver` | Ver el módulo de administración |
 | `ventas:ver` | Ver el módulo de ventas |
 | `trabajador:ver` | Ver el módulo de trabajador |
@@ -250,6 +256,31 @@ Campos: `idEmpleado`, `nombre`, `departamento`, `sueldo`.
 | POST | `/api/empleados` | `empleados:crear` |
 | PUT | `/api/empleados/{id}` | `empleados:editar` |
 | DELETE | `/api/empleados/{id}` | `empleados:eliminar` |
+
+### Cotizaciones — `/api/cotizaciones`
+
+Cotizaciones a clientes. Se crean a mano o leyendo el PDF exportado de **Siigo**
+(el PDF **nunca se guarda**: solo se lee para llenar el formulario).
+
+Campos: `numero` (único, ej. `C-1-2562`), `cliente`, `ingSolicitante`, `estado`
+(`PENDIENTE` / `APROBADA` / `NO_APROBADA`), `motivoRechazo`, `responsable` (usuario del
+sistema), `items` (materiales: `descripcion`, `cantidad`, `valorUnitario`, `valorBruto`),
+`subtotal`, `iva`, `total`, `numeroFactura`, `facturada` (calculado: tiene número de
+factura), `notas`, `avisos` (valores que no cuadran; son advertencias, no errores).
+
+| Método | Ruta | Permiso | Descripción |
+|---|---|---|---|
+| GET | `/api/cotizaciones` | `cotizaciones:ver` | Lista paginada. Filtros: `estado`, `responsableId`, `facturada`, `texto` (número, cliente o ingeniero), `pagina`, `tamano` |
+| GET | `/api/cotizaciones/{id}` | `cotizaciones:ver` | Detalle con materiales y avisos |
+| GET | `/api/cotizaciones/responsables` | `cotizaciones:ver` | Usuarios activos con rol, para escoger el responsable |
+| POST | `/api/cotizaciones/leer-pdf` | `cotizaciones:crear` | `multipart/form-data` con el campo `archivo` (máx. 10 MB). Devuelve los datos leídos, avisos e `idExistente` si el número ya existe. **No guarda nada** |
+| POST | `/api/cotizaciones` | `cotizaciones:crear` | Crear (queda `PENDIENTE`). `subtotal`, `iva`, `total` y `valorBruto` son opcionales: si no vienen se calculan (IVA 19 %) |
+| PUT | `/api/cotizaciones/{id}` | `cotizaciones:editar` | Reemplaza todos los datos, incluidos los materiales. No cambia el estado |
+| PATCH | `/api/cotizaciones/{id}/estado` | `cotizaciones:aprobar` | `{ "estado": "NO_APROBADA", "motivoRechazo": "..." }` (el motivo es obligatorio solo para `NO_APROBADA`) |
+| DELETE | `/api/cotizaciones/{id}` | `cotizaciones:eliminar` | Eliminar |
+
+El `numeroFactura` es texto libre por ahora; cuando exista el módulo de Facturación pasará
+a enlazar con la factura.
 
 ### Auditoría — `/api/auditoria` (requiere `auditoria:ver`)
 

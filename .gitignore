@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Documentos reales de clientes (solo para pruebas locales, nunca a git) ###
+src/modelo de cotizacion/
+src/modelo de factura/
+*.pdf

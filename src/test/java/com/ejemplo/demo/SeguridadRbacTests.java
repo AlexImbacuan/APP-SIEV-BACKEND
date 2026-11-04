@@ -262,7 +262,7 @@ class SeguridadRbacTests {
         assertEquals(permisos, permisoRepositorio.count());
         assertEquals(roles, rolRepositorio.count());
         assertEquals(usuarios, usuarioRepositorio.count());
-        assertEquals(14, permisos);
+        assertEquals(com.ejemplo.demo.seguridad.Permisos.CATALOGO.size(), permisos);
     }
 
     // ------------------------------------------------------------ auditoría

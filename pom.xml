@@ -65,6 +65,13 @@
 			<version>2.8.9</version>
 		</dependency>
 
+		<!-- Lectura de PDFs (cotizaciones de Siigo). El archivo no se guarda: solo se lee el texto -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.5</version>
+		</dependency>
+
 		<dependency>
 			<groupId>com.mysql</groupId>
 			<artifactId>mysql-connector-j</artifactId>

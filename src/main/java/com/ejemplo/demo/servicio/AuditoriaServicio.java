@@ -18,6 +18,7 @@ public class AuditoriaServicio {
 
     public static final String ENTIDAD_USUARIO = "USUARIO";
     public static final String ENTIDAD_ROL = "ROL";
+    public static final String ENTIDAD_COTIZACION = "COTIZACION";
 
     /** Máximo de registros por página, para no cargar toda la tabla de golpe. */
     public static final int TAMANO_MAXIMO = 100;
