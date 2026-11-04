@@ -13,7 +13,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "Roles y permisos", description = "Crear roles y asignarles permisos. Requiere roles:gestionar.")
+@Tag(name = "Roles y permisos", description = "Crear roles y asignarles permisos. Requiere roles:gestionar "
+        + "(listar roles también se permite con usuarios:gestionar).")
 @RestController
 @RequestMapping("/api")
 @PreAuthorize("hasAuthority('roles:gestionar')") // aplica a todos los endpoints
@@ -25,7 +26,14 @@ public class RolControlador {
         this.rolServicio = rolServicio;
     }
 
+    /**
+     * Lectura también con usuarios:gestionar: quien gestiona usuarios necesita la lista
+     * de roles para el selector al crear un usuario o cambiarle el rol.
+     * (La anotación del método reemplaza a la de la clase; crear roles y cambiar sus
+     * permisos sigue exigiendo roles:gestionar.)
+     */
     @GetMapping("/roles")
+    @PreAuthorize("hasAnyAuthority('roles:gestionar', 'usuarios:gestionar')")
     public List<RolDTO> listarRoles() {
         return rolServicio.listarRoles();
     }

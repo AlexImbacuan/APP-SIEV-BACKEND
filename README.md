@@ -220,7 +220,7 @@ respetan en los siguientes arranques.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/api/roles` | Listar roles |
+| GET | `/api/roles` | Listar roles. También permitido con `usuarios:gestionar` (para el selector de rol) |
 | POST | `/api/roles` | Crear: `{ "nombre", "descripcion", "permisos": [...] }` |
 | PUT | `/api/roles/{id}/permisos` | Reemplazar permisos: `{ "permisos": ["proyectos:ver"] }` |
 | GET | `/api/permisos` | Listar todos los permisos |

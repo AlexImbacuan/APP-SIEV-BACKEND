@@ -316,6 +316,43 @@ class SeguridadRbacTests {
                 .andExpect(jsonPath("$.estado").value(400));
     }
 
+    // ------------------------------------------------------------ roles
+
+    @Test
+    void gestorDeUsuarios_puedeListarRolesPeroNoModificarlos() throws Exception {
+        Rol gestor = rolRepositorio.findByNombre("GESTOR_USUARIOS_TEST").orElseGet(() -> {
+            Rol r = new Rol("GESTOR_USUARIOS_TEST", "Solo gestiona usuarios");
+            r.getPermisos().add(permisoRepositorio.findByCodigo("usuarios:gestionar").orElseThrow());
+            return rolRepositorio.save(r);
+        });
+        String token = tokenDe("gestor-usuarios@test.com", gestor.getNombre());
+
+        // Puede leer la lista de roles (la necesita para el selector)
+        mvc.perform(get("/api/roles").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].nombre", hasItems("SUPERADMIN", "SUPERVISOR", "TECNICO")));
+
+        // Pero no crear roles, cambiar sus permisos ni ver el catálogo de permisos
+        mvc.perform(post("/api/roles").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nombre\":\"NO_DEBE_CREARSE\",\"descripcion\":\"x\",\"permisos\":[]}"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(put("/api/roles/" + gestor.getId() + "/permisos").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"permisos\":[\"roles:gestionar\"]}"))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/permisos").header("Authorization", token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void sinGestionarUsuariosNiRoles_noPuedeListarRoles() throws Exception {
+        mvc.perform(get("/api/roles").header("Authorization", tokenDe("tecnico1@test.com", "TECNICO")))
+                .andExpect(status().isForbidden());
+    }
+
     // ------------------------------------------------------------ utilidades
 
     private String tokenDeAdmin() {
