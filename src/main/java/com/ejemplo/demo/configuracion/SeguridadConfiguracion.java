@@ -47,6 +47,8 @@ public class SeguridadConfiguracion {
                                 "/api/auth/login", "/api/auth/register"
                         ).permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Documentación de la API (Swagger UI y especificación OpenAPI)
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Denegar por defecto: todo lo demás requiere token.
                         // El permiso concreto lo exige @PreAuthorize en cada endpoint.
                         .anyRequest().authenticated()
