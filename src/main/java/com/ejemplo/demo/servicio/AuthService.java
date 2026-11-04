@@ -62,19 +62,64 @@ public class AuthService {
             throw new DisabledException("El usuario está desactivado");
         }
 
-        String accessToken = jwtService.generarToken(usuario);
-        String nuevoRefreshToken = jwtService.generarRefreshToken();
-
-        // Buscar si el usuario ya tiene un refresh token
+        // Buscar si el usuario ya tiene un refresh token y actualizarlo, o crear uno nuevo
         RefreshToken refresh = refreshTokenRepository
                 .findByUsuario(usuario)
                 .orElse(new RefreshToken());
-
-        // Actualizar o crear
         refresh.setUsuario(usuario);
-        refresh.setToken(nuevoRefreshToken);
-        refresh.setExpiracion(LocalDateTime.now().plusDays(7));
 
+        return emitirTokens(refresh);
+    }
+
+    /**
+     * Cambia un refresh token válido por un access token nuevo.
+     * El refresh token se rota: el anterior deja de servir y se devuelve uno nuevo,
+     * así un token robado y ya usado no se puede reutilizar.
+     */
+    @Transactional
+    public LoginResponse refrescar(String refreshToken) {
+
+        RefreshToken refresh = (refreshToken == null || refreshToken.isBlank())
+                ? null
+                : refreshTokenRepository.findByToken(refreshToken).orElse(null);
+
+        if (refresh == null) {
+            throw new BadCredentialsException(SESION_INVALIDA);
+        }
+
+        if (refresh.getExpiracion() == null || refresh.getExpiracion().isBefore(LocalDateTime.now())) {
+            refreshTokenRepository.delete(refresh);
+            throw new BadCredentialsException(SESION_INVALIDA);
+        }
+
+        if (!refresh.getUsuario().estaActivo()) {
+            refreshTokenRepository.delete(refresh);
+            throw new DisabledException("El usuario está desactivado");
+        }
+
+        return emitirTokens(refresh);
+    }
+
+    /** Cierra la sesión: el refresh token deja de servir. Si no existe, no hace nada. */
+    @Transactional
+    public void logout(String refreshToken) {
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            refreshTokenRepository.deleteByToken(refreshToken);
+        }
+    }
+
+    private static final String SESION_INVALIDA = "Sesión inválida o expirada, inicia sesión de nuevo";
+
+    private static final int DIAS_REFRESH_TOKEN = 7;
+
+    /** Genera un access token nuevo y rota el refresh token (nuevo valor y nueva expiración). */
+    private LoginResponse emitirTokens(RefreshToken refresh) {
+
+        String accessToken = jwtService.generarToken(refresh.getUsuario());
+        String nuevoRefreshToken = jwtService.generarRefreshToken();
+
+        refresh.setToken(nuevoRefreshToken);
+        refresh.setExpiracion(LocalDateTime.now().plusDays(DIAS_REFRESH_TOKEN));
         refreshTokenRepository.save(refresh);
 
         return new LoginResponse(accessToken, nuevoRefreshToken);

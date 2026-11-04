@@ -43,8 +43,8 @@ public class SeguridadConfiguracion {
                 .authorizeHttpRequests(auth -> auth
                         // Únicas rutas públicas (con y sin prefijo /api para no romper el frontend)
                         .requestMatchers(HttpMethod.POST,
-                                "/auth/login", "/auth/register",
-                                "/api/auth/login", "/api/auth/register"
+                                "/auth/login", "/auth/register", "/auth/refresh", "/auth/logout",
+                                "/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/logout"
                         ).permitAll()
                         .requestMatchers("/error").permitAll()
                         // Documentación de la API (Swagger UI y especificación OpenAPI)

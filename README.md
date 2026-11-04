@@ -133,7 +133,25 @@ son públicas (ver `SeguridadConfiguracion`).
    Authorization: Bearer eyJ...
    ```
 
-El `accessToken` expira a los **15 minutos**.
+El `accessToken` expira a los **15 minutos** y el `refreshToken` a los **7 días**.
+
+3. Cuando el `accessToken` expira (la API responde **401**), pedir uno nuevo con
+   `POST /api/auth/refresh`:
+
+   ```json
+   { "refreshToken": "..." }
+   ```
+
+   Devuelve un `accessToken` y un `refreshToken` **nuevos** (misma forma que el login).
+   Hay que guardar los dos: el refresh token anterior deja de servir (rotación).
+   Si el refresh también responde 401 (expirado, ya usado, sesión cerrada o usuario
+   desactivado), hay que volver al login.
+
+4. Al cerrar sesión, llamar a `POST /api/auth/logout` con `{ "refreshToken": "..." }`
+   (responde 204) y borrar ambos tokens del frontend.
+
+Cada usuario tiene **una sola sesión renovable**: si inicia sesión en otro dispositivo,
+el refresh token del anterior deja de servir.
 
 `POST /api/auth/register` es público y crea un usuario activo **sin rol**: no puede hacer
 nada hasta que un SUPERADMIN le asigne uno.
@@ -142,7 +160,7 @@ Las rutas de autenticación responden tanto en `/auth/*` como en `/api/auth/*`.
 
 ## Roles y permisos (RBAC)
 
-Todas las rutas requieren token salvo `login` y `register`. Además, cada endpoint exige un
+Todas las rutas requieren token salvo `login`, `register`, `refresh` y `logout`. Además, cada endpoint exige un
 permiso concreto mediante `@PreAuthorize`.
 
 Al arrancar, `InicializadorDatos` crea los permisos y roles que falten (nunca duplica):
@@ -182,6 +200,8 @@ respetan en los siguientes arranques.
 | Método | Ruta | Permiso | Descripción |
 |---|---|---|---|
 | POST | `/api/auth/login` | Público | Inicia sesión y devuelve los tokens |
+| POST | `/api/auth/refresh` | Público | Cambia el refresh token por tokens nuevos |
+| POST | `/api/auth/logout` | Público | Invalida el refresh token |
 | POST | `/api/auth/register` | Público | Registra un usuario sin rol |
 | GET | `/api/auth/me` | Autenticado | Usuario actual con su rol y permisos |
 
