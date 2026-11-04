@@ -1,5 +1,6 @@
 package com.ejemplo.demo.controlador;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.ejemplo.demo.dto.ActualizarPermisosRequest;
 import com.ejemplo.demo.dto.CrearRolRequest;
 import com.ejemplo.demo.dto.PermisoDTO;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "Roles y permisos", description = "Crear roles y asignarles permisos. Requiere roles:gestionar.")
 @RestController
 @RequestMapping("/api")
 @PreAuthorize("hasAuthority('roles:gestionar')") // aplica a todos los endpoints

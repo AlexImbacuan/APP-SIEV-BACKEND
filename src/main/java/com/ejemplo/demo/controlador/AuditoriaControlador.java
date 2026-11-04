@@ -1,5 +1,6 @@
 package com.ejemplo.demo.controlador;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.ejemplo.demo.dto.AuditoriaDTO;
 import com.ejemplo.demo.dto.PaginaDTO;
 import com.ejemplo.demo.servicio.AuditoriaServicio;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 
 /** Solo lectura: la auditoría no se puede modificar ni borrar desde la API. */
+@Tag(name = "Auditoría", description = "Consulta del registro de auditoría (solo lectura). Requiere auditoria:ver.")
 @RestController
 @RequestMapping("/api/auditoria")
 @PreAuthorize("hasAuthority('auditoria:ver')")

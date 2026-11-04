@@ -1,5 +1,6 @@
 package com.ejemplo.demo.controlador;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.ejemplo.demo.dto.ActualizarUsuarioRequest;
 import com.ejemplo.demo.dto.AsignarRolRequest;
 import com.ejemplo.demo.dto.CambiarEstadoRequest;
@@ -14,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
+@Tag(name = "Usuarios", description = "Crear, editar, activar/desactivar usuarios y asignarles rol. Requiere usuarios:gestionar.")
 @RestController
 @RequestMapping("/api/usuarios")
 @PreAuthorize("hasAuthority('usuarios:gestionar')") // aplica a todos los endpoints

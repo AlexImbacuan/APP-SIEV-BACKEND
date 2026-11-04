@@ -1,5 +1,6 @@
 package com.ejemplo.demo.controlador;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.ejemplo.demo.modelo.Proyecto;
 import com.ejemplo.demo.servicio.ProyectoServicio;
 import org.springframework.http.ResponseEntity;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "Proyectos", description = "CRUD de proyectos. Requiere proyectos:ver / crear / editar / eliminar.")
 @RestController
 @RequestMapping("/api/proyectos")
 public class ProyectoControlador {

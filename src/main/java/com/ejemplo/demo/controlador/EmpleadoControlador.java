@@ -1,5 +1,6 @@
 package com.ejemplo.demo.controlador;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.ejemplo.demo.modelo.Empleado;
 import com.ejemplo.demo.servicio.EmpleadoServicio;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "Empleados", description = "CRUD de empleados. Requiere empleados:ver / crear / editar / eliminar.")
 @RestController
 @RequestMapping("/api/empleados")
 public class EmpleadoControlador {

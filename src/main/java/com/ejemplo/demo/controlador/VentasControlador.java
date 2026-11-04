@@ -1,5 +1,6 @@
 package com.ejemplo.demo.controlador;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.ejemplo.demo.dto.ModuloDTO;
 import com.ejemplo.demo.servicio.ModuloServicio;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Aquí irán los endpoints reales del módulo; protege cada uno con
  * @PreAuthorize("hasAuthority('ventas:accion')") y agrega el permiso a Permisos.CATALOGO.
  */
+@Tag(name = "Ventas", description = "Módulo de ventas. Requiere ventas:ver.")
 @RestController
 @RequestMapping("/api/ventas")
 public class VentasControlador {

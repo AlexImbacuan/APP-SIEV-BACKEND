@@ -1,5 +1,6 @@
 package com.ejemplo.demo.controlador;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.ejemplo.demo.dto.LoginRequest;
 import com.ejemplo.demo.dto.LoginResponse;
 import com.ejemplo.demo.dto.RegisterRequest;
@@ -10,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /** Responde en /auth/* (frontend actual) y en /api/auth/* (ruta nueva). */
+@Tag(name = "Autenticación", description = "Login, registro y usuario actual. Login y registro son públicos; /me solo requiere token.")
 @RestController
 @RequestMapping({"/auth", "/api/auth"})
 public class AuthControlador {
