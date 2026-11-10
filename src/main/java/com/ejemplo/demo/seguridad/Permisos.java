@@ -40,6 +40,9 @@ public final class Permisos {
     public static final String COTIZACIONES_APROBAR = "cotizaciones:aprobar";
     public static final String COTIZACIONES_ELIMINAR = "cotizaciones:eliminar";
 
+    /** Temporal: consulta directa a la API de Siigo. Solo SUPERADMIN (no está en ningún rol por defecto). */
+    public static final String SIIGO_EXPLORAR = "siigo:explorar";
+
     // ---- Módulos del frontend ----
     public static final String ADMINISTRACION_VER = "administracion:ver";
     public static final String VENTAS_VER = "ventas:ver";
@@ -69,6 +72,8 @@ public final class Permisos {
             new Definicion(COTIZACIONES_EDITAR, "Editar cotizaciones, materiales, notas y número de factura", "cotizaciones"),
             new Definicion(COTIZACIONES_APROBAR, "Cambiar el estado de las cotizaciones", "cotizaciones"),
             new Definicion(COTIZACIONES_ELIMINAR, "Eliminar cotizaciones", "cotizaciones"),
+
+            new Definicion(SIIGO_EXPLORAR, "Consultar datos directamente de la API de Siigo (temporal)", "siigo"),
 
             new Definicion(ADMINISTRACION_VER, "Ver el módulo de administración", "administracion"),
             new Definicion(VENTAS_VER, "Ver el módulo de ventas", "ventas"),
