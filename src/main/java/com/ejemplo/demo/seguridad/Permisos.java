@@ -42,6 +42,10 @@ public final class Permisos {
 
     /** Temporal: consulta directa a la API de Siigo. Solo SUPERADMIN (no está en ningún rol por defecto). */
     public static final String SIIGO_EXPLORAR = "siigo:explorar";
+    /** Editar el control SIEV de las cotizaciones de Siigo (estado, OC, factura, pagos, responsable...). */
+    public static final String SIIGO_EDITAR = "siigo:editar";
+
+    public static final String CLIENTES_GESTIONAR = "clientes:gestionar";
 
     // ---- Módulos del frontend ----
     public static final String ADMINISTRACION_VER = "administracion:ver";
@@ -73,7 +77,10 @@ public final class Permisos {
             new Definicion(COTIZACIONES_APROBAR, "Cambiar el estado de las cotizaciones", "cotizaciones"),
             new Definicion(COTIZACIONES_ELIMINAR, "Eliminar cotizaciones", "cotizaciones"),
 
-            new Definicion(SIIGO_EXPLORAR, "Consultar datos directamente de la API de Siigo (temporal)", "siigo"),
+            new Definicion(SIIGO_EXPLORAR, "Ver las cotizaciones de Siigo, sincronizar y consultar la API de Siigo", "siigo"),
+            new Definicion(SIIGO_EDITAR, "Editar el control de las cotizaciones de Siigo (estado, OC, factura, pagos, responsable)", "siigo"),
+
+            new Definicion(CLIENTES_GESTIONAR, "Crear, editar y eliminar clientes", "clientes"),
 
             new Definicion(ADMINISTRACION_VER, "Ver el módulo de administración", "administracion"),
             new Definicion(VENTAS_VER, "Ver el módulo de ventas", "ventas"),

@@ -13,4 +13,6 @@ public interface SincronizacionSiigoRepositorio extends JpaRepository<Sincroniza
     Optional<SincronizacionSiigo> findFirstByRecursoAndExitosaTrueOrderByInicioDesc(String recurso);
 
     List<SincronizacionSiigo> findTop20ByRecursoOrderByInicioDesc(String recurso);
+
+    long countByRecursoAndExitosaFalseAndInicioAfter(String recurso, java.time.LocalDateTime desde);
 }

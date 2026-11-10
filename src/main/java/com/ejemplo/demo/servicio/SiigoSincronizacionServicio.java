@@ -1,7 +1,5 @@
 package com.ejemplo.demo.servicio;
 
-import com.ejemplo.demo.dto.PaginaDTO;
-import com.ejemplo.demo.dto.SiigoCotizacionDTO;
 import com.ejemplo.demo.modelo.SiigoCotizacion;
 import com.ejemplo.demo.modelo.SincronizacionSiigo;
 import com.ejemplo.demo.repositorio.SiigoCotizacionRepositorio;
@@ -14,15 +12,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
@@ -52,6 +48,7 @@ public class SiigoSincronizacionServicio {
     private static final Logger log = LoggerFactory.getLogger(SiigoSincronizacionServicio.class);
     static final String RECURSO = "quotations";
     static final int HORAS_VIGENCIA = 12;
+    static final int MAX_FALLOS_SEGUIDOS = 6;
 
     private final SiigoCliente siigo;
     private final SiigoCotizacionRepositorio cotizaciones;
@@ -80,6 +77,40 @@ public class SiigoSincronizacionServicio {
     @Scheduled(cron = "${siigo.sincronizacion.cron:0 0 6,13 * * *}", zone = "America/Bogota")
     public void programada() {
         sincronizarSiConfigurado("AUTOMATICA");
+    }
+
+    /**
+     * Cada hora (al minuto 30, para no chocar con la programada): si la última sincronización
+     * falló, la reintenta. Se rinde tras MAX_FALLOS_SEGUIDOS fallos desde la última exitosa,
+     * para no acumular errores con Siigo (bloquea el usuario API si más del 80% fallan).
+     */
+    @Scheduled(cron = "${siigo.sincronizacion.reintento-cron:0 30 * * * *}", zone = "America/Bogota")
+    public void reintentarSiFallo() {
+        if (!debeReintentar()) {
+            return;
+        }
+        log.info("La última sincronización con Siigo falló: reintentando");
+        sincronizarSiConfigurado("REINTENTO");
+    }
+
+    public boolean debeReintentar() {
+        if (!siigo.configurado() || enCurso.get()) {
+            return false;
+        }
+        var ultima = sincronizaciones.findFirstByRecursoOrderByInicioDesc(RECURSO);
+        if (ultima.isEmpty() || ultima.get().isExitosa()) {
+            return false;
+        }
+        LocalDateTime desde = sincronizaciones.findFirstByRecursoAndExitosaTrueOrderByInicioDesc(RECURSO)
+                .map(SincronizacionSiigo::getInicio)
+                .orElse(LocalDateTime.of(2000, 1, 1, 0, 0));
+        long fallos = sincronizaciones.countByRecursoAndExitosaFalseAndInicioAfter(RECURSO, desde);
+        if (fallos >= MAX_FALLOS_SEGUIDOS) {
+            log.warn("Sincronización con Siigo: {} fallos seguidos, no se reintenta hasta la próxima programada "
+                    + "o una manual", fallos);
+            return false;
+        }
+        return true;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -157,20 +188,7 @@ public class SiigoSincronizacionServicio {
                 c = new SiigoCotizacion();
                 c.setSiigoId(siigoId);
             }
-            JsonNode items = q.path("items");
-            boolean cambio = c.aplicar(
-                    texto(q, "name") != null ? texto(q, "name") : "SIN-NUMERO",
-                    q.path("number").isNumber() ? q.path("number").asInt() : null,
-                    fecha(texto(q, "date")),
-                    texto(q.path("customer"), "identification"),
-                    texto(q.path("customer"), "id"),
-                    q.path("seller").isNumber() ? q.path("seller").asLong() : null,
-                    q.path("total").isNumber() ? q.path("total").decimalValue() : null,
-                    items.isArray() ? items.size() : 0,
-                    items.isArray() ? json(items) : null,
-                    texto(q, "public_url"),
-                    fechaHora(texto(q.path("metadata"), "created")),
-                    fechaHora(texto(q.path("metadata"), "last_updated")));
+            boolean cambio = c.aplicar(datosDe(q));
             if (esNueva) {
                 cotizaciones.save(c);
                 nuevas++;
@@ -192,43 +210,6 @@ public class SiigoSincronizacionServicio {
 
     // ---------------------------------------------------------------- consultas locales
 
-    public PaginaDTO<SiigoCotizacionDTO> buscar(String texto, LocalDate desde, LocalDate hasta,
-                                                boolean incluirEliminadas, int pagina, int tamano) {
-        Specification<SiigoCotizacion> spec = (root, query, cb) -> cb.conjunction();
-        if (!incluirEliminadas) {
-            spec = spec.and((root, query, cb) -> cb.isFalse(root.get("eliminadaEnSiigo")));
-        }
-        if (texto != null && !texto.isBlank()) {
-            String patron = "%" + texto.trim().toLowerCase() + "%";
-            spec = spec.and((root, query, cb) -> cb.or(
-                    cb.like(cb.lower(root.get("numero")), patron),
-                    cb.like(cb.lower(root.get("clienteNit")), patron)));
-        }
-        if (desde != null) {
-            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("fecha"), desde));
-        }
-        if (hasta != null) {
-            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("fecha"), hasta));
-        }
-        PageRequest orden = PageRequest.of(Math.max(0, pagina), Math.min(Math.max(1, tamano), 200),
-                Sort.by(Sort.Order.desc("fecha"), Sort.Order.desc("consecutivo")));
-        return PaginaDTO.desde(cotizaciones.findAll(spec, orden), c -> SiigoCotizacionDTO.desde(c, null));
-    }
-
-    public SiigoCotizacionDTO obtener(Long id) {
-        SiigoCotizacion c = cotizaciones.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cotización no encontrada"));
-        JsonNode items = mapper.createArrayNode();
-        if (c.getItemsJson() != null) {
-            try {
-                items = mapper.readTree(c.getItemsJson());
-            } catch (JsonProcessingException e) {
-                log.warn("items inválidos en siigo_cotizacion {}", id);
-            }
-        }
-        return SiigoCotizacionDTO.desde(c, items);
-    }
-
     public Map<String, Object> estado() {
         Map<String, Object> salida = new HashMap<>();
         salida.put("configurado", siigo.configurado());
@@ -242,6 +223,60 @@ public class SiigoSincronizacionServicio {
 
     public List<SincronizacionSiigo> historial() {
         return sincronizaciones.findTop20ByRecursoOrderByInicioDesc(RECURSO);
+    }
+
+    /** Convierte una cotización de Siigo a los datos que se guardan. */
+    SiigoCotizacion.DatosSiigo datosDe(JsonNode q) {
+        JsonNode items = q.path("items");
+        BigDecimal subtotal = BigDecimal.ZERO;
+        BigDecimal iva = BigDecimal.ZERO;
+        if (items.isArray()) {
+            for (JsonNode it : items) {
+                BigDecimal bruto = it.path("price").decimalValue().multiply(it.path("quantity").decimalValue());
+                BigDecimal descuento = it.path("discount").path("value").decimalValue();
+                subtotal = subtotal.add(bruto.subtract(descuento));
+                for (JsonNode imp : it.path("taxes")) {
+                    iva = iva.add(imp.path("value").decimalValue());
+                }
+            }
+        }
+        String encabezado = encabezado(q);
+        EncabezadoCotizacion.Datos enc = EncabezadoCotizacion.interpretar(encabezado);
+        return new SiigoCotizacion.DatosSiigo(
+                texto(q, "name") != null ? texto(q, "name") : "SIN-NUMERO",
+                q.path("number").isNumber() ? q.path("number").asInt() : null,
+                fecha(texto(q, "date")),
+                texto(q.path("customer"), "identification"),
+                texto(q.path("customer"), "id"),
+                q.path("seller").isNumber() ? q.path("seller").asLong() : null,
+                items.isArray() ? subtotal : null,
+                items.isArray() ? iva : null,
+                q.path("total").isNumber() ? q.path("total").decimalValue() : null,
+                items.isArray() ? items.size() : 0,
+                items.isArray() ? json(items) : null,
+                texto(q, "public_url"),
+                encabezado,
+                enc.descripcion(), enc.ingeniero(), enc.sede(),
+                fechaHora(texto(q.path("metadata"), "created")),
+                fechaHora(texto(q.path("metadata"), "last_updated")));
+    }
+
+    /**
+     * Texto del encabezado ("Señor / ingeniero / sede / Asunto") que SIEV escribe en Siigo.
+     * HOY LA API DE SIIGO NO LO ENTREGA (verificado con GET /quotations/{id} el 2026-11-10), así que
+     * descripción e ingeniero se escriben a mano en el control. Se deja la búsqueda por si Siigo
+     * agrega el campo, o para llenarlo desde otra fuente (PDF o vista pública) más adelante.
+     */
+    static final List<String> CAMPOS_ENCABEZADO = List.of("observations", "header", "encabezado", "comments");
+
+    private static String encabezado(JsonNode q) {
+        for (String campo : CAMPOS_ENCABEZADO) {
+            String v = texto(q, campo);
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        return null;
     }
 
     // ---------------------------------------------------------------- utilidades

@@ -4,6 +4,7 @@ import com.ejemplo.demo.modelo.SincronizacionSiigo;
 import com.ejemplo.demo.repositorio.SiigoCotizacionRepositorio;
 import com.ejemplo.demo.repositorio.SincronizacionSiigoRepositorio;
 import com.ejemplo.demo.servicio.SiigoCliente;
+import com.ejemplo.demo.servicio.SiigoCotizacionServicio;
 import com.ejemplo.demo.servicio.SiigoSincronizacionServicio;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +34,9 @@ class SiigoSincronizacionTests {
 
     @Autowired
     private SiigoSincronizacionServicio servicio;
+
+    @Autowired
+    private SiigoCotizacionServicio consultas;
 
     @Autowired
     private SiigoCotizacionRepositorio cotizaciones;
@@ -76,14 +80,14 @@ class SiigoSincronizacionTests {
         assertEquals(1, segunda.getActualizadas());
         assertEquals(1, segunda.getEliminadas());
 
-        var lista = servicio.buscar(null, null, null, false, 0, 25);
+        var lista = consultas.buscar(null, null, null, null, null, false, 0, 25);
         assertEquals(2, lista.totalElementos()); // "b" queda oculta
         assertEquals("C-1-3", lista.contenido().get(0).numero()); // más reciente primero
-        assertEquals(3, servicio.buscar(null, null, null, true, 0, 25).totalElementos());
+        assertEquals(3, consultas.buscar(null, null, null, null, null, true, 0, 25).totalElementos());
 
-        var a = servicio.buscar("C-1-1", null, null, false, 0, 25).contenido().get(0);
+        var a = consultas.buscar("C-1-1", null, null, null, null, false, 0, 25).contenido().get(0);
         assertEquals(0, a.total().compareTo(new java.math.BigDecimal("1500")));
-        var detalle = servicio.obtener(a.id());
+        var detalle = consultas.obtener(a.id());
         assertEquals(1, detalle.items().size());
         assertEquals("Mano de obra", detalle.items().get(0).path("description").asText());
     }
@@ -97,7 +101,7 @@ class SiigoSincronizacionTests {
         siigoDevuelve(true, cotizacion("a", "C-1-1", 1, "2026-11-01", 1000, null));
         SincronizacionSiigo s = servicio.sincronizar("MANUAL");
         assertEquals(0, s.getEliminadas());
-        assertEquals(2, servicio.buscar(null, null, null, false, 0, 25).totalElementos());
+        assertEquals(2, consultas.buscar(null, null, null, null, null, false, 0, 25).totalElementos());
     }
 
     @Test
@@ -108,6 +112,24 @@ class SiigoSincronizacionTests {
         var ultima = sincronizaciones.findFirstByRecursoOrderByInicioDesc("quotations").orElseThrow();
         assertFalse(ultima.isExitosa());
         assertEquals("Siigo caído", ultima.getError());
+    }
+
+    @Test
+    void reintentoHorario_soloSiLaUltimaFalloYConTope() throws Exception {
+        when(siigo.configurado()).thenReturn(true);
+        siigoDevuelve(false, cotizacion("a", "C-1-1", 1, "2026-11-01", 1000, null));
+        servicio.sincronizar("MANUAL");
+        assertFalse(servicio.debeReintentar(), "la última fue exitosa");
+
+        when(siigo.listarTodo(eq("quotations"), anyMap(), anyBoolean(), anyBoolean()))
+                .thenThrow(new RuntimeException("Siigo respondió 503"));
+        assertThrows(RuntimeException.class, () -> servicio.sincronizar("AUTOMATICA"));
+        assertTrue(servicio.debeReintentar(), "la última falló");
+
+        for (int i = 0; i < 5; i++) {
+            assertThrows(RuntimeException.class, () -> servicio.sincronizar("REINTENTO"));
+        }
+        assertFalse(servicio.debeReintentar(), "6 fallos seguidos: deja de reintentar");
     }
 
     @Test

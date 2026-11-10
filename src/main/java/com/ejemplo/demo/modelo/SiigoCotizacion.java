@@ -3,26 +3,50 @@ package com.ejemplo.demo.modelo;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 /**
- * Copia local de una cotización de Siigo. Siigo es la fuente de verdad: esta tabla
- * solo la escribe la sincronización (SiigoSincronizacionServicio), nunca el usuario.
+ * Cotización de Siigo + control SIEV.
+ *
+ * Dos grupos de campos:
+ *  - DATOS DE SIIGO: solo los escribe la sincronización (aplicar). Siigo es la fuente de verdad.
+ *  - CONTROL SIEV: solo los escribe el usuario (con siigo:editar). La sincronización nunca los toca.
+ *
+ * descripcion e ingenieroSolicitante tienen las dos versiones: la leída del encabezado de Siigo
+ * (descripcionSiigo / ingenieroSiigo) y la que escribe el usuario. Se muestra la del usuario si
+ * existe; si no, la de Siigo.
+ *
  * Las cotizaciones que desaparecen de Siigo no se borran: se marcan eliminadaEnSiigo.
  */
 @Entity
 @Table(name = "siigo_cotizacion", indexes = {
         @Index(name = "idx_siigo_cot_numero", columnList = "numero"),
         @Index(name = "idx_siigo_cot_nit", columnList = "clienteNit"),
-        @Index(name = "idx_siigo_cot_fecha", columnList = "fecha")
+        @Index(name = "idx_siigo_cot_fecha", columnList = "fecha"),
+        @Index(name = "idx_siigo_cot_estado", columnList = "estado")
 })
 public class SiigoCotizacion {
+
+    /** Datos que vienen de Siigo, ya normalizados. Se comparan con equals para detectar cambios. */
+    public record DatosSiigo(String numero, Integer consecutivo, LocalDate fecha, String clienteNit,
+                             String clienteSiigoId, Long vendedorId, BigDecimal subtotal, BigDecimal iva,
+                             BigDecimal total, int cantidadItems, String itemsJson, String urlPublica,
+                             String encabezado, String descripcion, String ingeniero, String sede,
+                             LocalDateTime creadoEnSiigo, LocalDateTime actualizadoEnSiigo) {
+        public DatosSiigo {
+            subtotal = dinero(subtotal);
+            iva = dinero(iva);
+            total = dinero(total);
+        }
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // ------------------------------------------------------------ DATOS DE SIIGO
 
     /** id (UUID) de la cotización en Siigo. */
     @Column(nullable = false, unique = true, length = 64)
@@ -46,6 +70,14 @@ public class SiigoCotizacion {
     /** id del vendedor en Siigo (campo seller). */
     private Long vendedorId;
 
+    /** Suma de cantidad × precio − descuento de los ítems. */
+    @Column(precision = 15, scale = 2)
+    private BigDecimal subtotal;
+
+    /** Suma de los impuestos de los ítems. */
+    @Column(precision = 15, scale = 2)
+    private BigDecimal iva;
+
     @Column(precision = 15, scale = 2)
     private BigDecimal total;
 
@@ -58,6 +90,18 @@ public class SiigoCotizacion {
     @Column(length = 1000)
     private String urlPublica;
 
+    /** Texto del encabezado/observaciones de Siigo, tal cual. */
+    @Column(columnDefinition = "TEXT")
+    private String encabezadoSiigo;
+
+    /** Leídos del encabezado (ver EncabezadoCotizacion). */
+    @Column(length = 500)
+    private String descripcionSiigo;
+    @Column(length = 150)
+    private String ingenieroSiigo;
+    @Column(length = 200)
+    private String sedeSiigo;
+
     private LocalDateTime creadoEnSiigo;
     private LocalDateTime actualizadoEnSiigo;
 
@@ -68,44 +112,86 @@ public class SiigoCotizacion {
     @Column(nullable = false)
     private LocalDateTime sincronizadoEn;
 
-    /**
-     * Copia los datos de Siigo. Devuelve true si algo cambió (para contar las actualizadas
-     * y no reescribir filas iguales).
-     */
-    public boolean aplicar(String numero, Integer consecutivo, LocalDate fecha, String clienteNit,
-                           String clienteSiigoId, Long vendedorId, BigDecimal total, int cantidadItems,
-                           String itemsJson, String urlPublica, LocalDateTime creadoEnSiigo,
-                           LocalDateTime actualizadoEnSiigo) {
-        boolean cambio = !Objects.equals(this.numero, numero)
-                || !Objects.equals(this.consecutivo, consecutivo)
-                || !Objects.equals(this.fecha, fecha)
-                || !Objects.equals(this.clienteNit, clienteNit)
-                || !Objects.equals(this.clienteSiigoId, clienteSiigoId)
-                || !Objects.equals(this.vendedorId, vendedorId)
-                || (this.total == null ? total != null : total == null || this.total.compareTo(total) != 0)
-                || this.cantidadItems != cantidadItems
-                || !Objects.equals(this.itemsJson, itemsJson)
-                || !Objects.equals(this.urlPublica, urlPublica)
-                || !Objects.equals(this.creadoEnSiigo, creadoEnSiigo)
-                || !Objects.equals(this.actualizadoEnSiigo, actualizadoEnSiigo)
-                || this.eliminadaEnSiigo;
+    // ------------------------------------------------------------ CONTROL SIEV
+
+    /** Escrita por el usuario; si es null se muestra descripcionSiigo. */
+    @Column(length = 500)
+    private String descripcion;
+
+    /** Escrito por el usuario; si es null se muestra ingenieroSiigo. */
+    @Column(length = 150)
+    private String ingenieroSolicitante;
+
+    /** Nullable en BD para no fallar al agregar la columna a filas existentes; ver getEstado(). */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private EstadoSiigoCotizacion estado;
+
+    @ManyToOne
+    @JoinColumn(name = "responsable_id")
+    private Usuario responsable;
+
+    @Column(length = 50)
+    private String ordenCompra;
+
+    @Column(precision = 15, scale = 2)
+    private BigDecimal valorOc;
+
+    /** N° de factura (texto libre por ahora; luego se cruzará con las facturas de Siigo). */
+    @Column(length = 50)
+    private String numeroFactura;
+
+    private LocalDate fechaFactura;
+    private LocalDate fechaPago;
+
+    @Column(length = 100)
+    private String comprobantePago;
+
+    @Column(precision = 15, scale = 2)
+    private BigDecimal valorPagado;
+
+    private LocalDateTime controlActualizadoEn;
+
+    @Column(length = 150)
+    private String controlActualizadoPor;
+
+    // ------------------------------------------------------------ sincronización
+
+    public DatosSiigo datosSiigo() {
+        return new DatosSiigo(numero, consecutivo, fecha, clienteNit, clienteSiigoId, vendedorId, subtotal, iva,
+                total, cantidadItems, itemsJson, urlPublica, encabezadoSiigo, descripcionSiigo, ingenieroSiigo,
+                sedeSiigo, creadoEnSiigo, actualizadoEnSiigo);
+    }
+
+    /** Copia los datos de Siigo. Devuelve true si algo cambió. No toca el control SIEV. */
+    public boolean aplicar(DatosSiigo d) {
+        boolean cambio = eliminadaEnSiigo || !d.equals(datosSiigo());
+        if (estado == null) {
+            estado = EstadoSiigoCotizacion.POR_APROBAR;
+        }
         if (!cambio) {
             return false;
         }
-        this.numero = numero;
-        this.consecutivo = consecutivo;
-        this.fecha = fecha;
-        this.clienteNit = clienteNit;
-        this.clienteSiigoId = clienteSiigoId;
-        this.vendedorId = vendedorId;
-        this.total = total;
-        this.cantidadItems = cantidadItems;
-        this.itemsJson = itemsJson;
-        this.urlPublica = urlPublica;
-        this.creadoEnSiigo = creadoEnSiigo;
-        this.actualizadoEnSiigo = actualizadoEnSiigo;
-        this.eliminadaEnSiigo = false;
-        this.sincronizadoEn = LocalDateTime.now();
+        numero = d.numero();
+        consecutivo = d.consecutivo();
+        fecha = d.fecha();
+        clienteNit = d.clienteNit();
+        clienteSiigoId = d.clienteSiigoId();
+        vendedorId = d.vendedorId();
+        subtotal = d.subtotal();
+        iva = d.iva();
+        total = d.total();
+        cantidadItems = d.cantidadItems();
+        itemsJson = d.itemsJson();
+        urlPublica = d.urlPublica();
+        encabezadoSiigo = d.encabezado();
+        descripcionSiigo = d.descripcion();
+        ingenieroSiigo = d.ingeniero();
+        sedeSiigo = d.sede();
+        creadoEnSiigo = d.creadoEnSiigo();
+        actualizadoEnSiigo = d.actualizadoEnSiigo();
+        eliminadaEnSiigo = false;
+        sincronizadoEn = LocalDateTime.now();
         return true;
     }
 
@@ -118,6 +204,41 @@ public class SiigoCotizacion {
         sincronizadoEn = LocalDateTime.now();
         return true;
     }
+
+    // ------------------------------------------------------------ control
+
+    public void actualizarControl(String descripcion, String ingenieroSolicitante, Usuario responsable,
+                                  String ordenCompra, BigDecimal valorOc, String numeroFactura,
+                                  LocalDate fechaFactura, LocalDate fechaPago, String comprobantePago,
+                                  BigDecimal valorPagado, String actor) {
+        this.descripcion = descripcion;
+        this.ingenieroSolicitante = ingenieroSolicitante;
+        this.responsable = responsable;
+        this.ordenCompra = ordenCompra;
+        this.valorOc = dinero(valorOc);
+        this.numeroFactura = numeroFactura;
+        this.fechaFactura = fechaFactura;
+        this.fechaPago = fechaPago;
+        this.comprobantePago = comprobantePago;
+        this.valorPagado = dinero(valorPagado);
+        marcarControl(actor);
+    }
+
+    public void cambiarEstado(EstadoSiigoCotizacion nuevo, String actor) {
+        this.estado = nuevo;
+        marcarControl(actor);
+    }
+
+    private void marcarControl(String actor) {
+        controlActualizadoEn = LocalDateTime.now();
+        controlActualizadoPor = actor;
+    }
+
+    static BigDecimal dinero(BigDecimal v) {
+        return v == null ? null : v.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    // ------------------------------------------------------------ getters
 
     public Long getId() {
         return id;
@@ -155,6 +276,14 @@ public class SiigoCotizacion {
         return vendedorId;
     }
 
+    public BigDecimal getSubtotal() {
+        return subtotal;
+    }
+
+    public BigDecimal getIva() {
+        return iva;
+    }
+
     public BigDecimal getTotal() {
         return total;
     }
@@ -171,6 +300,22 @@ public class SiigoCotizacion {
         return urlPublica;
     }
 
+    public String getEncabezadoSiigo() {
+        return encabezadoSiigo;
+    }
+
+    public String getDescripcionSiigo() {
+        return descripcionSiigo;
+    }
+
+    public String getIngenieroSiigo() {
+        return ingenieroSiigo;
+    }
+
+    public String getSedeSiigo() {
+        return sedeSiigo;
+    }
+
     public LocalDateTime getCreadoEnSiigo() {
         return creadoEnSiigo;
     }
@@ -185,5 +330,57 @@ public class SiigoCotizacion {
 
     public LocalDateTime getSincronizadoEn() {
         return sincronizadoEn;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public String getIngenieroSolicitante() {
+        return ingenieroSolicitante;
+    }
+
+    public EstadoSiigoCotizacion getEstado() {
+        return estado == null ? EstadoSiigoCotizacion.POR_APROBAR : estado;
+    }
+
+    public Usuario getResponsable() {
+        return responsable;
+    }
+
+    public String getOrdenCompra() {
+        return ordenCompra;
+    }
+
+    public BigDecimal getValorOc() {
+        return valorOc;
+    }
+
+    public String getNumeroFactura() {
+        return numeroFactura;
+    }
+
+    public LocalDate getFechaFactura() {
+        return fechaFactura;
+    }
+
+    public LocalDate getFechaPago() {
+        return fechaPago;
+    }
+
+    public String getComprobantePago() {
+        return comprobantePago;
+    }
+
+    public BigDecimal getValorPagado() {
+        return valorPagado;
+    }
+
+    public LocalDateTime getControlActualizadoEn() {
+        return controlActualizadoEn;
+    }
+
+    public String getControlActualizadoPor() {
+        return controlActualizadoPor;
     }
 }

@@ -254,8 +254,11 @@ public class SiigoCliente {
                     tokenRenovado = true;
                     continue;
                 }
-                if (estado == 429 && intento < MAX_REINTENTOS) {
-                    esperar(intento);
+                // 429 = límite de peticiones; 502/503/504 = Siigo caído momentáneamente
+                // (ej. "documents_service unavailable"). Se reintenta con espera creciente.
+                boolean temporal = estado == 429 || estado == 502 || estado == 503 || estado == 504;
+                if (temporal && intento < MAX_REINTENTOS) {
+                    esperar(intento, estado);
                     continue;
                 }
                 throw errorDeSiigo(e);
@@ -299,9 +302,10 @@ public class SiigoCliente {
         tokenVence = Instant.EPOCH;
     }
 
-    private static void esperar(int intento) {
+    private static void esperar(int intento, int estado) {
         long ms = 2000L << intento; // 2s, 4s, 8s, 16s
-        log.warn("Siigo respondió 429 (límite de peticiones). Reintentando en {} ms", ms);
+        log.warn("Siigo respondió {} (error temporal). Reintento {} de {} en {} ms",
+                estado, intento + 1, MAX_REINTENTOS, ms);
         try {
             Thread.sleep(ms);
         } catch (InterruptedException ie) {
