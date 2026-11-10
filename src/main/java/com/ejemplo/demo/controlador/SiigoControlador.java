@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -46,11 +47,23 @@ public class SiigoControlador {
         return siigo.listar(recurso, filtros);
     }
 
-    /** Recorre todas las páginas (de a 100) y junta los resultados. Ej: GET /api/siigo/quotations/todo */
-    @Operation(summary = "Todos los registros de un recurso, recorriendo las páginas (máx. 50 páginas)")
+    /**
+     * Todas las páginas juntas. Ej:
+     *   GET /api/siigo/quotations/todo?resumen=true          (sin ítems, liviano)
+     *   GET /api/siigo/quotations/todo?refrescar=true        (ignora la caché de 10 min)
+     * Cualquier otro parámetro se reenvía a Siigo como filtro.
+     */
+    @Operation(summary = "Todos los registros de un recurso (páginas en paralelo, caché de 10 min). "
+            + "resumen=true quita los ítems; refrescar=true ignora la caché")
     @GetMapping("/{recurso}/todo")
-    public JsonNode listarTodo(@PathVariable String recurso, @RequestParam Map<String, String> filtros) {
-        return siigo.listarTodo(recurso, filtros);
+    public JsonNode listarTodo(@PathVariable String recurso,
+                               @RequestParam(defaultValue = "false") boolean resumen,
+                               @RequestParam(defaultValue = "false") boolean refrescar,
+                               @RequestParam Map<String, String> filtros) {
+        Map<String, String> paraSiigo = new LinkedHashMap<>(filtros);
+        paraSiigo.remove("resumen");
+        paraSiigo.remove("refrescar");
+        return siigo.listarTodo(recurso, paraSiigo, resumen, refrescar);
     }
 
     @Operation(summary = "Un registro por su id de Siigo")

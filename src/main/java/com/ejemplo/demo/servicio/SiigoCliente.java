@@ -19,9 +19,16 @@ import org.springframework.web.util.UriBuilder;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Cliente TEMPORAL de la API de Siigo Nube, para explorar qué datos ofrece
@@ -50,6 +57,11 @@ public class SiigoCliente {
     /** Tope de páginas al traer "todo", para no agotar el límite de peticiones. */
     static final int MAX_PAGINAS = 50;
     private static final int MAX_REINTENTOS = 4;
+    /** Páginas que se piden a Siigo al mismo tiempo. */
+    static final int PARALELAS = 4;
+    static final int CACHE_MINUTOS = 10;
+
+    private final Map<String, Cacheado> cache = new ConcurrentHashMap<>();
 
     private final RestClient http;
     private final ObjectMapper mapper;
@@ -75,6 +87,11 @@ public class SiigoCliente {
         this.partnerId = partnerId;
     }
 
+    /** true si hay usuario y access_key de Siigo. */
+    public boolean configurado() {
+        return !usuario.isBlank() && !accessKey.isBlank();
+    }
+
     /** Una página de un recurso. Los filtros (page, page_size, created_start...) se reenvían tal cual. */
     public JsonNode listar(String recurso, Map<String, String> filtros) {
         validarRecurso(recurso);
@@ -92,60 +109,128 @@ public class SiigoCliente {
     }
 
     /**
-     * Recorre todas las páginas de un recurso y junta los resultados.
-     * Para en la última página o al llegar a MAX_PAGINAS (avisa con "incompleto": true).
+     * Trae todos los registros de un recurso.
+     *
+     * - La 1.ª página dice cuántos hay; el resto se pide EN PARALELO (PARALELAS a la vez),
+     *   sin pasar del límite de Siigo de 100 peticiones/minuto.
+     * - El resultado se guarda en memoria CACHE_MINUTOS para no repetir la consulta;
+     *   refrescar=true la fuerza.
+     * - resumen=true quita los ítems (deja "cantidadItems") para que la respuesta pese poco.
+     * - Se detiene en MAX_PAGINAS (avisa con "incompleto": true).
      */
-    public JsonNode listarTodo(String recurso, Map<String, String> filtros) {
+    public JsonNode listarTodo(String recurso, Map<String, String> filtros, boolean resumen, boolean refrescar) {
         validarRecurso(recurso);
+        String clave = recurso + filtros;
+        Cacheado cacheado = cache.get(clave);
+        boolean desdeCache = true;
+        if (refrescar || cacheado == null || cacheado.vence().isBefore(Instant.now())) {
+            cacheado = new Cacheado(consultarTodo(recurso, filtros),
+                    Instant.now().plus(Duration.ofMinutes(CACHE_MINUTOS)));
+            cache.put(clave, cacheado);
+            desdeCache = false;
+        }
+
+        ObjectNode salida = cacheado.datos().deepCopy();
+        salida.put("desdeCache", desdeCache);
+        if (resumen) {
+            for (JsonNode r : salida.withArray("results")) {
+                if (r instanceof ObjectNode o && o.path("items").isArray()) {
+                    o.put("cantidadItems", o.path("items").size());
+                    o.remove("items");
+                }
+            }
+        }
+        return salida;
+    }
+
+    private ObjectNode consultarTodo(String recurso, Map<String, String> filtros) {
+        long inicio = System.currentTimeMillis();
+        JsonNode primera = pagina(recurso, filtros, 1);
         ArrayNode resultados = mapper.createArrayNode();
         Integer total = null;
-        int pagina = 1;
+        int paginas = 1;
         boolean incompleto = false;
 
-        while (true) {
-            Map<String, String> params = new LinkedHashMap<>(filtros);
-            params.put("page", String.valueOf(pagina));
-            params.put("page_size", String.valueOf(TAMANO_PAGINA));
-            JsonNode respuesta = listar(recurso, params);
-
+        if (primera.isArray()) {
             // Los catálogos (taxes, users...) devuelven un arreglo directo, sin paginación
-            if (respuesta.isArray()) {
-                resultados.addAll((ArrayNode) respuesta);
-                total = resultados.size();
-                break;
-            }
-
-            JsonNode lote = respuesta.path("results");
+            resultados.addAll((ArrayNode) primera);
+            total = resultados.size();
+        } else {
+            JsonNode lote = primera.path("results");
             if (lote.isArray()) {
                 resultados.addAll((ArrayNode) lote);
             }
-            JsonNode totalNodo = respuesta.path("pagination").path("total_results");
+            JsonNode totalNodo = primera.path("pagination").path("total_results");
             if (totalNodo.isNumber()) {
                 total = totalNodo.asInt();
+                // Usar el tamaño que Siigo realmente aplicó, por si limita page_size por debajo de 100
+                int tamano = primera.path("pagination").path("page_size").asInt(TAMANO_PAGINA);
+                int necesarias = (int) Math.ceil(total / (double) Math.max(1, tamano));
+                paginas = Math.min(necesarias, MAX_PAGINAS);
+                incompleto = necesarias > MAX_PAGINAS;
             }
 
-            boolean ultima = !lote.isArray() || lote.isEmpty() || lote.size() < TAMANO_PAGINA
-                    || (total != null && resultados.size() >= total);
-            if (ultima) {
-                break;
+            if (paginas > 1) {
+                ExecutorService hilos = Executors.newFixedThreadPool(PARALELAS);
+                try {
+                    List<Future<JsonNode>> futuros = new ArrayList<>();
+                    for (int p = 2; p <= paginas; p++) {
+                        int numero = p;
+                        futuros.add(hilos.submit(() -> pagina(recurso, filtros, numero)));
+                    }
+                    for (Future<JsonNode> f : futuros) { // en orden de página
+                        JsonNode loteN = f.get().path("results");
+                        if (loteN.isArray()) {
+                            resultados.addAll((ArrayNode) loteN);
+                        }
+                    }
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof RuntimeException re) {
+                        throw re;
+                    }
+                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Error consultando Siigo");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Consulta a Siigo interrumpida");
+                } finally {
+                    hilos.shutdownNow();
+                }
             }
-            if (pagina >= MAX_PAGINAS) {
-                incompleto = true;
-                break;
-            }
-            pagina++;
         }
+
+        long ms = System.currentTimeMillis() - inicio;
+        log.info("Siigo {}: {} registros en {} páginas, {} ms", recurso, resultados.size(), paginas, ms);
 
         ObjectNode salida = mapper.createObjectNode();
         salida.put("recurso", recurso);
-        salida.put("paginasConsultadas", pagina);
+        salida.put("paginasConsultadas", paginas);
         if (total != null) {
             salida.put("totalEnSiigo", total);
         }
         salida.put("cantidad", resultados.size());
         salida.put("incompleto", incompleto);
+        salida.put("segundos", ms / 1000.0);
+        salida.put("consultadoEn", Instant.now().toString());
         salida.set("results", resultados);
         return salida;
+    }
+
+    private JsonNode pagina(String recurso, Map<String, String> filtros, int numero) {
+        Map<String, String> params = new LinkedHashMap<>(filtros);
+        params.put("page", String.valueOf(numero));
+        params.put("page_size", String.valueOf(TAMANO_PAGINA));
+        long inicio = System.currentTimeMillis();
+        JsonNode respuesta = listar(recurso, params);
+        log.debug("Siigo {} página {}: {} ms", recurso, numero, System.currentTimeMillis() - inicio);
+        return respuesta;
+    }
+
+    /** Vacía la caché (por ejemplo, después de crear cotizaciones en Siigo). */
+    public void limpiarCache() {
+        cache.clear();
+    }
+
+    private record Cacheado(ObjectNode datos, Instant vence) {
     }
 
     // ------------------------------------------------------------------
