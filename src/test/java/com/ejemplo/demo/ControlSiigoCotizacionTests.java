@@ -171,12 +171,15 @@ class ControlSiigoCotizacionTests {
     }
 
     @Test
-    void supervisor_aunNoTieneAcceso() throws Exception {
+    void supervisor_veYEditaCotizacionesPeroNoGestionaClientes() throws Exception {
         mvc.perform(get("/api/siigo-cotizaciones").header("Authorization", supervisor))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
         mvc.perform(patch("/api/siigo-cotizaciones/" + idCotizacion + "/estado").header("Authorization", supervisor)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"estado\":\"PAGADA\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("PAGADA"));
+        mvc.perform(get("/api/clientes").header("Authorization", supervisor))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/clientes").header("Authorization", supervisor).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nit\":\"1\",\"nombre\":\"X\"}"))
                 .andExpect(status().isForbidden());
