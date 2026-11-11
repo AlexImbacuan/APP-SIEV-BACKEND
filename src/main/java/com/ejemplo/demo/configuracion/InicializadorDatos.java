@@ -1,8 +1,10 @@
 package com.ejemplo.demo.configuracion;
 
+import com.ejemplo.demo.modelo.MigracionDatos;
 import com.ejemplo.demo.modelo.Permiso;
 import com.ejemplo.demo.modelo.Rol;
 import com.ejemplo.demo.modelo.Usuario;
+import com.ejemplo.demo.repositorio.MigracionDatosRepositorio;
 import com.ejemplo.demo.repositorio.PermisoRepositorio;
 import com.ejemplo.demo.repositorio.RolRepositorio;
 import com.ejemplo.demo.repositorio.UsuarioRepositorio;
@@ -47,6 +49,7 @@ public class InicializadorDatos implements CommandLineRunner {
     private final UsuarioRepositorio usuarioRepositorio;
     private final PasswordEncoder passwordEncoder;
     private final AuditoriaServicio auditoria;
+    private final MigracionDatosRepositorio migraciones;
 
     @Value("${admin.email:}")
     private String adminEmail;
@@ -58,12 +61,14 @@ public class InicializadorDatos implements CommandLineRunner {
                               RolRepositorio rolRepositorio,
                               UsuarioRepositorio usuarioRepositorio,
                               PasswordEncoder passwordEncoder,
-                              AuditoriaServicio auditoria) {
+                              AuditoriaServicio auditoria,
+                              MigracionDatosRepositorio migraciones) {
         this.permisoRepositorio = permisoRepositorio;
         this.rolRepositorio = rolRepositorio;
         this.usuarioRepositorio = usuarioRepositorio;
         this.passwordEncoder = passwordEncoder;
         this.auditoria = auditoria;
+        this.migraciones = migraciones;
     }
 
     @Override
@@ -80,6 +85,7 @@ public class InicializadorDatos implements CommandLineRunner {
         Rol supervisor = crearRolSiNoExiste(Permisos.ROL_SUPERVISOR, "Gestiona proyectos y empleados",
                 seleccionar(permisos, Permisos.POR_DEFECTO_SUPERVISOR));
         agregarPermisosNuevos(supervisor, Permisos.POR_DEFECTO_SUPERVISOR, creadosAhora, permisos);
+        supervisorSoloSiigo(supervisor, permisos);
 
         Rol tecnico = crearRolSiNoExiste(Permisos.ROL_TECNICO, "Consulta proyectos y empleados",
                 seleccionar(permisos, Permisos.POR_DEFECTO_TECNICO));
@@ -132,6 +138,43 @@ public class InicializadorDatos implements CommandLineRunner {
             log.info("Permisos nuevos agregados al rol {}: {}", rol.getNombre(), agregados);
             auditoria.registrarComo("sistema", "ACTUALIZAR_PERMISOS_ROL", AuditoriaServicio.ENTIDAD_ROL,
                     rol.getId(), "Seed: permisos nuevos por defecto " + agregados);
+        }
+    }
+
+    /**
+     * Migración única (2026-11): el SUPERVISOR deja el módulo viejo de cotizaciones
+     * (a mano / PDF) y pasa a trabajar con las de Siigo. Se aplica también a un rol que
+     * ya existe en la BD. Queda anotada en migracion_datos, así que no se repite y no
+     * pisa lo que el SUPERADMIN cambie después desde la gestión de roles.
+     */
+    public static final String MIGRACION_SUPERVISOR_SIIGO = "2026-11-supervisor-solo-siigo";
+    private static final Set<String> QUITAR_SUPERVISOR = Set.of(
+            Permisos.COTIZACIONES_VER, Permisos.COTIZACIONES_CREAR, Permisos.COTIZACIONES_EDITAR,
+            Permisos.COTIZACIONES_APROBAR, Permisos.COTIZACIONES_ELIMINAR);
+    private static final List<String> AGREGAR_SUPERVISOR = List.of(Permisos.SIIGO_EXPLORAR, Permisos.SIIGO_EDITAR);
+
+    private void supervisorSoloSiigo(Rol supervisor, Map<String, Permiso> permisos) {
+
+        if (migraciones.existsById(MIGRACION_SUPERVISOR_SIIGO)) {
+            return;
+        }
+
+        List<String> quitados = supervisor.getPermisos().stream()
+                .map(Permiso::getCodigo).filter(QUITAR_SUPERVISOR::contains).sorted().toList();
+        supervisor.getPermisos().removeIf(p -> QUITAR_SUPERVISOR.contains(p.getCodigo()));
+
+        Set<String> actuales = new HashSet<>();
+        supervisor.getPermisos().forEach(p -> actuales.add(p.getCodigo()));
+        List<String> agregados = AGREGAR_SUPERVISOR.stream().filter(actuales::add).toList();
+        agregados.forEach(codigo -> supervisor.getPermisos().add(permisos.get(codigo)));
+
+        migraciones.save(new MigracionDatos(MIGRACION_SUPERVISOR_SIIGO));
+
+        if (!quitados.isEmpty() || !agregados.isEmpty()) {
+            log.info("Migración {}: SUPERVISOR quitados {} agregados {}", MIGRACION_SUPERVISOR_SIIGO, quitados, agregados);
+            auditoria.registrarComo("sistema", "ACTUALIZAR_PERMISOS_ROL", AuditoriaServicio.ENTIDAD_ROL,
+                    supervisor.getId(), "Migración " + MIGRACION_SUPERVISOR_SIIGO
+                            + ": quitados " + quitados + ", agregados " + agregados);
         }
     }
 

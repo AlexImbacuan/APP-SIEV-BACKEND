@@ -4,6 +4,7 @@ import com.ejemplo.demo.configuracion.InicializadorDatos;
 import com.ejemplo.demo.modelo.Permiso;
 import com.ejemplo.demo.modelo.Rol;
 import com.ejemplo.demo.modelo.Usuario;
+import com.ejemplo.demo.repositorio.MigracionDatosRepositorio;
 import com.ejemplo.demo.repositorio.PermisoRepositorio;
 import com.ejemplo.demo.repositorio.RolRepositorio;
 import com.ejemplo.demo.repositorio.UsuarioRepositorio;
@@ -17,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -44,6 +46,9 @@ class ModulosTests {
 
     @Autowired
     private InicializadorDatos inicializadorDatos;
+
+    @Autowired
+    private MigracionDatosRepositorio migraciones;
 
     @Autowired
     private JwtService jwtService;
@@ -134,6 +139,54 @@ class ModulosTests {
                 supervisor.getPermisos().add(permisoRepositorio.findByCodigo("ventas:ver").orElseThrow());
                 rolRepositorio.save(supervisor);
             }
+        }
+    }
+
+    /**
+     * Caso real de Supabase: el SUPERVISOR ya existía con el módulo viejo de cotizaciones.
+     * La migración le quita cotizaciones:* y le da siigo:*, conserva lo demás, es idempotente
+     * y no se repite si después el admin cambia los permisos a mano.
+     */
+    @Test
+    void migracion_supervisorSoloSiigo() {
+        String[] viejos = {"cotizaciones:ver", "cotizaciones:crear", "cotizaciones:editar",
+                "cotizaciones:aprobar", "cotizaciones:eliminar"};
+        try {
+            // 1) Dejar el SUPERVISOR como estaba en la BD antes del cambio
+            Rol supervisor = rolRepositorio.findByNombre("SUPERVISOR").orElseThrow();
+            supervisor.getPermisos().removeIf(p -> p.getCodigo().startsWith("siigo:"));
+            for (String c : viejos) {
+                supervisor.getPermisos().add(permisoRepositorio.findByCodigo(c).orElseThrow());
+            }
+            rolRepositorio.save(supervisor);
+            migraciones.deleteById(InicializadorDatos.MIGRACION_SUPERVISOR_SIIGO);
+
+            // 2) Arranque: se aplica
+            inicializadorDatos.run();
+            for (String c : viejos) {
+                assertFalse(rolTiene("SUPERVISOR", c), c);
+            }
+            assertTrue(rolTiene("SUPERVISOR", "siigo:explorar"));
+            assertTrue(rolTiene("SUPERVISOR", "siigo:editar"));
+            assertTrue(rolTiene("SUPERVISOR", "proyectos:ver"), "conserva los demás");
+            assertTrue(rolTiene("SUPERADMIN", "cotizaciones:ver"));
+            assertTrue(rolTiene("SUPERADMIN", "siigo:editar"));
+            assertTrue(rolTiene("SUPERADMIN", "clientes:gestionar"));
+            assertFalse(rolTiene("SUPERVISOR", "clientes:gestionar"));
+            int cantidad = rolRepositorio.findByNombre("SUPERVISOR").orElseThrow().getPermisos().size();
+
+            // 3) Segundo arranque: no cambia nada
+            inicializadorDatos.run();
+            assertEquals(cantidad, rolRepositorio.findByNombre("SUPERVISOR").orElseThrow().getPermisos().size());
+
+            // 4) El admin le devuelve cotizaciones:ver a mano; un nuevo arranque lo respeta
+            Rol s = rolRepositorio.findByNombre("SUPERVISOR").orElseThrow();
+            s.getPermisos().add(permisoRepositorio.findByCodigo("cotizaciones:ver").orElseThrow());
+            rolRepositorio.save(s);
+            inicializadorDatos.run();
+            assertTrue(rolTiene("SUPERVISOR", "cotizaciones:ver"));
+        } finally {
+            quitarPermisoDe("SUPERVISOR", "cotizaciones:ver");
         }
     }
 
