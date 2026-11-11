@@ -56,8 +56,8 @@ class CotizacionesTests {
 
     @Test
     void crearAMano_calculaValoresYQuedaPendiente() throws Exception {
-        String supervisor = tokenDe("cot-supervisor@test.com", "SUPERVISOR");
-        long responsableId = usuario("cot-supervisor@test.com").getId();
+        String gestor = tokenDe("cot-gestor@test.com", "SUPERADMIN");
+        long responsableId = usuario("cot-gestor@test.com").getId();
         String numero = numeroNuevo();
 
         // Sin subtotal/iva/total ni valorBruto: se calculan
@@ -69,7 +69,7 @@ class CotizacionesTests {
                  "notas":"Primera nota"}
                 """.formatted(numero, responsableId);
 
-        mvc.perform(post("/api/cotizaciones").header("Authorization", supervisor)
+        mvc.perform(post("/api/cotizaciones").header("Authorization", gestor)
                         .contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.numero").value(numero))
@@ -150,15 +150,15 @@ class CotizacionesTests {
 
     @Test
     void cambiarEstado_noAprobadaExigeMotivo() throws Exception {
-        String supervisor = tokenDe("cot-supervisor@test.com", "SUPERVISOR");
-        long id = idDe(crear(supervisor, numeroNuevo()));
+        String gestor = tokenDe("cot-gestor@test.com", "SUPERADMIN");
+        long id = idDe(crear(gestor, numeroNuevo()));
 
-        mvc.perform(patch("/api/cotizaciones/" + id + "/estado").header("Authorization", supervisor)
+        mvc.perform(patch("/api/cotizaciones/" + id + "/estado").header("Authorization", gestor)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"estado\":\"NO_APROBADA\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.mensaje").value("El campo 'motivoRechazo' es obligatorio"));
 
-        mvc.perform(patch("/api/cotizaciones/" + id + "/estado").header("Authorization", supervisor)
+        mvc.perform(patch("/api/cotizaciones/" + id + "/estado").header("Authorization", gestor)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"estado\":\"NO_APROBADA\",\"motivoRechazo\":\"Precio alto\"}"))
                 .andExpect(status().isOk())
@@ -166,7 +166,7 @@ class CotizacionesTests {
                 .andExpect(jsonPath("$.motivoRechazo").value("Precio alto"));
 
         // Al aprobarla se borra el motivo
-        mvc.perform(patch("/api/cotizaciones/" + id + "/estado").header("Authorization", supervisor)
+        mvc.perform(patch("/api/cotizaciones/" + id + "/estado").header("Authorization", gestor)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"estado\":\"APROBADA\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("APROBADA"))
@@ -277,12 +277,12 @@ class CotizacionesTests {
 
     @Test
     void leerPdf_devuelveDatosYNoGuardaNada() throws Exception {
-        String supervisor = tokenDe("cot-supervisor@test.com", "SUPERVISOR");
+        String gestor = tokenDe("cot-gestor@test.com", "SUPERADMIN");
         cotizacionRepositorio.findByNumeroIgnoreCase("C-1-9001").ifPresent(cotizacionRepositorio::delete);
         long antes = cotizacionRepositorio.count();
 
         mvc.perform(multipart("/api/cotizaciones/leer-pdf").file(pdf(PdfCotizacionDePrueba.generar()))
-                        .header("Authorization", supervisor))
+                        .header("Authorization", gestor))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.numero").value("C-1-9001"))
                 .andExpect(jsonPath("$.cliente").value("CLIENTE DE PRUEBA S.A"))

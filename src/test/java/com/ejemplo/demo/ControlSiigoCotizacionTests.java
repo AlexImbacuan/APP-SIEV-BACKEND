@@ -180,6 +180,9 @@ class ControlSiigoCotizacionTests {
                 .andExpect(jsonPath("$.estado").value("PAGADA"));
         mvc.perform(get("/api/clientes").header("Authorization", supervisor))
                 .andExpect(status().isOk());
+        // El módulo viejo (cotizaciones a mano / desde PDF) ya no es del supervisor
+        mvc.perform(get("/api/cotizaciones").header("Authorization", supervisor))
+                .andExpect(status().isForbidden());
         mvc.perform(post("/api/clientes").header("Authorization", supervisor).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nit\":\"1\",\"nombre\":\"X\"}"))
                 .andExpect(status().isForbidden());
